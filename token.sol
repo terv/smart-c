@@ -248,3 +248,79 @@ contract SimpleTokenCoin is MintableToken {
     uint32 public constant decimals = 18;
     
 }
+
+
+contract Crowdsale is Ownable {
+    
+    using SafeMath for uint;
+    
+    //Отдельный адрес для эфира (В контракте ICO  обычно полученный эфир не отсылают на адрес владельца контракта, а отсылают его на отдельный адрес)
+    address multisig;
+ 
+    //процент токенов, который мы хотим получить в конце ICO
+    uint restrictedPercent;
+ 
+    //Адрес счета для наших токенов
+    address restricted;
+ 
+    SimpleTokenCoin public token = new SimpleTokenCoin();
+ 
+    //Время начала ICO  — GMT в UNIX формате
+    uint start;
+    
+    //Время проведения ICO в днях
+    uint period;
+ 
+    //Ограничение на сумму, которую нам нужно собрать
+    uint hardcap;
+ 
+    //Коэффициент пересчета эфира в наши токены
+    uint rate;
+ 
+    function Crowdsale() {
+        multisig = ;
+        restricted = ;
+        restrictedPercent = 50;
+        rate = 100000000000000000000;
+        start = 1500379200;
+        period = 28;
+    }
+ 
+    //проверка дат ICO
+    modifier saleIsOn() {
+    	require(now > start && now < start + period * 1 days);
+    	_;
+    }
+    //Проверка предела собранных средств, если дошли до границы hardcap, то запрещаем продажу токенов.	
+    modifier isUnderHardCap() {
+        require(multisig.balance <= hardcap);
+        _;
+    }
+ 
+    function finishMinting() public onlyOwner {
+        uint issuedTokenSupply = token.totalSupply();
+        uint restrictedTokens = issuedTokenSupply.mul(restrictedPercent).div(100 - restrictedPercent);
+        token.mint(restricted, restrictedTokens);
+        token.finishMinting();
+    }
+ 
+    function createTokens() isUnderHardCap saleIsOn payable {
+        multisig.transfer(msg.value);
+        uint tokens = rate.mul(msg.value).div(1 ether);
+        uint bonusTokens = 0;
+        if(now < start + (period * 1 days).div(4)) {
+          bonusTokens = tokens.div(4);
+        } else if(now >= start + (period * 1 days).div(4) && now < (period * 1 days).div(4).mul(2)) {
+          bonusTokens = tokens.div(10);
+        } else if(now >= start + (period * 1 days).div(4).mul(2) && now < (period * 1 days).div(4).mul(3)) {
+          bonusTokens = tokens.div(20);
+        }
+        tokens += bonusTokens;
+        token.mint(msg.sender, tokens);
+    }
+ 
+    function() external payable {
+        createTokens();
+    }
+    
+}

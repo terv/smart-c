@@ -36,12 +36,14 @@ contract ERC20 is ERC20Basic {
  */
 library SafeMath {
     
+  //Умножение    
   function mul(uint256 a, uint256 b) internal constant returns (uint256) {
     uint256 c = a * b;
     assert(a == 0 || c / a == b);
     return c;
   }
 
+  //Деление
   function div(uint256 a, uint256 b) internal constant returns (uint256) {
     // assert(b > 0); // Solidity automatically throws when dividing by 0
     uint256 c = a / b;
@@ -49,11 +51,13 @@ library SafeMath {
     return c;
   }
 
+  //Вычитание
   function sub(uint256 a, uint256 b) internal constant returns (uint256) {
     assert(b <= a);
     return a - b;
   }
 
+  //Сложение
   function add(uint256 a, uint256 b) internal constant returns (uint256) {
     uint256 c = a + b;
     assert(c >= a);
@@ -77,10 +81,7 @@ contract BasicToken is ERC20Basic {
   * @param _to The address to transfer to.
   * @param _value The amount to be transferred.
   */
-  function transfer(address _to, uint256 _value) returns (bool) {
-    
-    //!!!Добавить проверить на переполнение sub и add
-      
+  function transfer(address _to, uint256 _value) returns (bool) {  
     balances[msg.sender] = balances[msg.sender].sub(_value);
     balances[_to] = balances[_to].add(_value);
     Transfer(msg.sender, _to, _value);
@@ -136,7 +137,7 @@ contract StandardToken is ERC20, BasicToken {
     // To change the approve amount you first have to reduce the addresses`
     //  allowance to zero by calling `approve(_spender, 0)` if it is not
     //  already 0 to mitigate the race condition described here:
-    //  https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+ 
     require((_value == 0) || (allowed[msg.sender][_spender] == 0));
 
     allowed[msg.sender][_spender] = _value;
@@ -225,7 +226,9 @@ contract MintableToken is StandardToken, Ownable {
   }
 
   /**
-   * @dev Функция остановки производства монет
+   * @dev Функция остановки производства монет 
+   * Эту функцию может вызывать только владелец смарт-котракта. Она дает нам право решить когда заканчивать ICO.
+   * Но ее можно выполнить и в условии, когда дойдем до суммы хардапа, либо истечет срок ICO.
    * @return True if the operation was successful.
    */
   function finishMinting() onlyOwner returns (bool) {
@@ -252,13 +255,17 @@ contract SimpleTokenCoin is MintableToken {
 
 contract Crowdsale is Ownable {
     
+	//Юзаем библиотеку безопасных мат операций
     using SafeMath for uint;
     
     //Отдельный адрес для эфира (В контракте ICO  обычно полученный эфир не отсылают на адрес владельца контракта, а отсылают его на отдельный адрес)
     address multisig;
- 
-    //процент токенов, который мы хотим получить в конце ICO
-    uint restrictedPercent;
+
+    // Кол-во токенов, которое мы хотим оставить на счете смарт-контракта в конце ICO
+    uint OwnerTokens;
+
+    // Кол-во токенов, которое мы хотим получить на свой адрем в конце ICO
+    uint restrictedTokens;
  
     //Адрес счета для наших токенов
     address restricted;
@@ -270,6 +277,13 @@ contract Crowdsale is Ownable {
     
     //Время проведения ICO в днях
     uint period;
+    uint IcoPeriod;
+    uint PreIcoPeriod;
+    uint PreIcoKef;
+    uint IcoPeriodOne;
+    uint IcoKefOne;
+    uint IcoPeriodTwo;
+    uint IcoKefOneTwo;
  
     //Ограничение на сумму, которую нам нужно собрать
     uint hardcap;
@@ -278,17 +292,43 @@ contract Crowdsale is Ownable {
     uint rate;
  
     function Crowdsale() {
-        multisig = ;
-        restricted = ;
-        restrictedPercent = 50;
+        //счет для эфира
+        multisig = 0xEA15Adb66DC92a4BbCcC8Bf32fd25E2e86a2A770;
+        //счет для наших собственных токенов
+        restricted = 0xb3eD172CC64839FB0C0Aa06aa129f402e994e7De;
+        //коэффициент пересчета в эфир
         rate = 100000000000000000000;
+		
+        //Начало Pre-ICO
         start = 1500379200;
-        period = 28;
+		//Длительность основного ICO
+        IcoPeriod = 30; 
+        //Длительность Pre-ICO
+        PreIcoPeriod = 14;
+        //Коэффициент бонусов Pre-ICO
+        PreIcoKef = 0.5; //0.5
+		
+        //Длительность первого периода бонусного ICO 
+        IcoPeriodOne = 2; 
+        //Коэффициент первого периода бонусного ICO 
+        IcoKefOne = 0.2;  //0.2
+		
+		//Длительность второго периода бонусного ICO 
+        IcoPeriodTwo = 5;
+        //Коэффициент второго периода бонусного ICO  
+        IcoKefOneTwo = 0.05; //0.05
+  
+        //Ограничение выпуска в 80 млн токенов
+        hardcap = 80000000;
+        //На счет смарт-контракта 8 млн токенов
+        OwnerTokens = 8000000;
+        //На наш собственный счет 12 млн токенов
+        restrictedTokens = 12000000;
     }
  
     //проверка дат ICO
     modifier saleIsOn() {
-    	require(now > start && now < start + period * 1 days);
+    	require(now > start && now < start + PreIcoPeriod + IcoPeriod * 1 days);
     	_;
     }
     //Проверка предела собранных средств, если дошли до границы hardcap, то запрещаем продажу токенов.	
@@ -298,23 +338,47 @@ contract Crowdsale is Ownable {
     }
  
     function finishMinting() public onlyOwner {
-        uint issuedTokenSupply = token.totalSupply();
-        uint restrictedTokens = issuedTokenSupply.mul(restrictedPercent).div(100 - restrictedPercent);
+        //Запрашиваем суммарное кол-во выпущенных монет
+        //uint issuedTokenSupply = token.totalSupply();
+        //Определяем кол-во собственных токенов
+        //uint restrictedTokens = issuedTokenSupply.mul(restrictedPercent).div(100 - restrictedPercent);
+
+        //Выпускаем монеты на наш адрес 
         token.mint(restricted, restrictedTokens);
+        //Выпускаем монеты на адрес смарт-контракта 
+        token.mint(owner, OwnerTokens);
+    
+        //Завершаем выпуск монет 
         token.finishMinting();
     }
  
     function createTokens() isUnderHardCap saleIsOn payable {
+        //Пересылаем эфир на наш кошелек
         multisig.transfer(msg.value);
+        //Определяем кол-во выпускаемых монет
         uint tokens = rate.mul(msg.value).div(1 ether);
         uint bonusTokens = 0;
-        if(now < start + (period * 1 days).div(4)) {
-          bonusTokens = tokens.div(4);
-        } else if(now >= start + (period * 1 days).div(4) && now < (period * 1 days).div(4).mul(2)) {
-          bonusTokens = tokens.div(10);
-        } else if(now >= start + (period * 1 days).div(4).mul(2) && now < (period * 1 days).div(4).mul(3)) {
-          bonusTokens = tokens.div(20);
-        }
+
+        //Определяем кол-во бонусных монет
+          
+        //Pre-ICO  50%
+        if (now > start && now < start +(PreIcoPeriod * 1 days))
+           {
+              bonusTokens = tokens.mul(PreIcoKef);
+           }
+		   
+		//основное ICO первый период 20%
+        if (now > start +(PreIcoPeriod * 1 days) && now < start +(PreIcoPeriod + IcoPeriodOne * 1 days))
+           {
+              bonusTokens = tokens.mul(IcoKefOne);
+           }
+		
+		//основное ICO первый период 20%
+        if (now > start +(PreIcoPeriod + IcoPeriodOne * 1 days) && now < start +(PreIcoPeriod + IcoPeriodOne + IcoPeriodTwo * 1 days))
+           {
+              bonusTokens = tokens.mul(IcoKefOneTwo);
+           }    
+
         tokens += bonusTokens;
         token.mint(msg.sender, tokens);
     }

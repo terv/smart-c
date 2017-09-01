@@ -206,7 +206,7 @@ contract Crowdsale is Ownable {
     // Кол-во токенов, которое мы хотим оставить на счете смарт-контракта в конце ICO
     uint OwnerTokens;
 
-    // Кол-во токенов, которое мы хотим получить на свой адрем в конце ICO
+    // Кол-во токенов, которое мы хотим получить на свой адрес в конце ICO
     uint restrictedTokens;
  
     //Адрес счета для наших токенов
@@ -236,7 +236,7 @@ contract Crowdsale is Ownable {
 	//Коэффициент второго периода бонусного ICO  
 	uint IcoKefOneTwo;
  
-    //Ограничение на сумму, которую нам нужно собрать
+    //Ограничение на сумму токенов, которую нам нужно собрать
     uint hardcap;
  
     //Коэффициент пересчета эфира в наши токены
@@ -283,9 +283,9 @@ contract Crowdsale is Ownable {
     	require(now > start && now < start + PreIcoPeriod + IcoPeriod * 1 days);
     	_;
     }
-    //Проверка предела собранных средств, если дошли до границы hardcap, то запрещаем продажу токенов.	
+    //Проверка предела собранных средств, если дошли до границы hardcap, то запрещаем выпуск и продажу токенов.	
     modifier isUnderHardCap() {
-        require(multisig.balance <= hardcap);
+        require(token.totalSupply() <= hardcap + OwnerTokens);
         _;
     }
  

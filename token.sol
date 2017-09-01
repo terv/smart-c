@@ -100,64 +100,6 @@ contract BasicToken is ERC20Basic {
 }
 
 /**
- * @title Standard ERC20 token
- *
- * @dev Реализация ERC20
- */
-contract StandardToken is ERC20, BasicToken {
-
-  mapping (address => mapping (address => uint256)) allowed;
-
-  /**
-   * @dev Передает _value монет от _from к _to
-   * @param _from address The address which you want to send tokens from
-   * @param _to address The address which you want to transfer to
-   * @param _value uint256 the amout of tokens to be transfered
-   */
-  function transferFrom(address _from, address _to, uint256 _value) returns (bool) {
-    var _allowance = allowed[_from][msg.sender];
-
-    // Check is not needed because sub(_allowance, _value) will already throw if this condition is not met
-    // require (_value <= _allowance);
-
-    balances[_to] = balances[_to].add(_value);
-    balances[_from] = balances[_from].sub(_value);
-    allowed[_from][msg.sender] = _allowance.sub(_value);
-    Transfer(_from, _to, _value);
-    return true;
-  }
-
-  /**
-   * @dev Разрешает пользователю _spender снимать с вашего счета (точнее со счета вызвавшего функцию пользователя) средства не более чем _value
-   * @param _spender The address which will spend the funds.
-   * @param _value The amount of tokens to be spent.
-   */
-  function approve(address _spender, uint256 _value) returns (bool) {
-
-    // To change the approve amount you first have to reduce the addresses`
-    //  allowance to zero by calling `approve(_spender, 0)` if it is not
-    //  already 0 to mitigate the race condition described here:
- 
-    require((_value == 0) || (allowed[msg.sender][_spender] == 0));
-
-    allowed[msg.sender][_spender] = _value;
-    Approval(msg.sender, _spender, _value);
-    return true;
-  }
-
-  /**
-   * @dev Разрешает пользователю _spender снимать с вашего счета (точнее со счета вызвавшего функцию пользователя) средства не более чем _value
-   * @param _owner address The address which owns the funds.
-   * @param _spender address The address which will spend the funds.
-   * @return A uint256 specifing the amount of tokens still available for the spender.
-   */
-  function allowance(address _owner, address _spender) constant returns (uint256 remaining) {
-    return allowed[_owner][_spender];
-  }
-
-}
-
-/**
  * @title Ownable
  * @dev Предоставляет возможность ограничивать доступ к функциям всем кроме владельца контракта
  */
@@ -197,7 +139,7 @@ contract Ownable {
  * (В нашем случает доп эмиссия не будет реализована)
  */
 
-contract MintableToken is StandardToken, Ownable {
+contract MintableToken is BasicToken, Ownable {
     
   event Mint(address indexed to, uint256 amount);
   
@@ -275,15 +217,24 @@ contract Crowdsale is Ownable {
     //Время начала ICO  — GMT в UNIX формате
     uint start;
     
-    //Время проведения ICO в днях
-    uint period;
+    //Время проведения основного ICO в днях
     uint IcoPeriod;
+	
+	//Время проведения Pre-ICO в днях
     uint PreIcoPeriod;
-    uint PreIcoKef;
-    uint IcoPeriodOne;
-    uint IcoKefOne;
-    uint IcoPeriodTwo;
-    uint IcoKefOneTwo;
+	
+	//Коэффициент бонусов Pre-ICO
+	uint PreIcoKef;
+		
+	//Длительность первого периода бонусного ICO 
+	uint IcoPeriodOne;
+	//Коэффициент первого периода бонусного ICO 
+	uint IcoKefOne;
+	
+	//Длительность второго периода бонусного ICO 
+	uint IcoPeriodTwo;
+	//Коэффициент второго периода бонусного ICO  
+	uint IcoKefOneTwo;
  
     //Ограничение на сумму, которую нам нужно собрать
     uint hardcap;
@@ -301,22 +252,23 @@ contract Crowdsale is Ownable {
 		
         //Начало Pre-ICO
         start = 1500379200;
+		
 		//Длительность основного ICO
-        IcoPeriod = 30; 
+        IcoPeriod = 30; //дней
         //Длительность Pre-ICO
-        PreIcoPeriod = 14;
-        //Коэффициент бонусов Pre-ICO
-        PreIcoKef = 0.5; //0.5
+        PreIcoPeriod = 14; //дней
+        //Процент бонусных токенов Pre-ICO
+        PreIcoKef = 50; //%
 		
-        //Длительность первого периода бонусного ICO 
-        IcoPeriodOne = 2; 
-        //Коэффициент первого периода бонусного ICO 
-        IcoKefOne = 0.2;  //0.2
+        //Длительность первого периода основного ICO 
+        IcoPeriodOne = 2; //дней
+        //Процент бонусных токенов первого периода основного ICO 
+        IcoKefOne = 20; //%
 		
-		//Длительность второго периода бонусного ICO 
-        IcoPeriodTwo = 5;
-        //Коэффициент второго периода бонусного ICO  
-        IcoKefOneTwo = 0.05; //0.05
+		//Длительность второго периода основного ICO 
+        IcoPeriodTwo = 5; //дней
+        //Процент бонусных токенов второго периода основного ICO  
+        IcoKefOneTwo = 5; //%
   
         //Ограничение выпуска в 80 млн токенов
         hardcap = 80000000;
@@ -361,22 +313,22 @@ contract Crowdsale is Ownable {
 
         //Определяем кол-во бонусных монет
           
-        //Pre-ICO  50%
+        //Pre-ICO
         if (now > start && now < start +(PreIcoPeriod * 1 days))
            {
-              bonusTokens = tokens.mul(PreIcoKef);
+              bonusTokens = tokens.mul(PreIcoKef / 100);
            }
 		   
-		//основное ICO первый период 20%
+		//основное ICO первый период
         if (now > start +(PreIcoPeriod * 1 days) && now < start +(PreIcoPeriod + IcoPeriodOne * 1 days))
            {
-              bonusTokens = tokens.mul(IcoKefOne);
+              bonusTokens = tokens.mul(IcoKefOne / 100);
            }
 		
-		//основное ICO первый период 20%
+		//основное ICO второй период
         if (now > start +(PreIcoPeriod + IcoPeriodOne * 1 days) && now < start +(PreIcoPeriod + IcoPeriodOne + IcoPeriodTwo * 1 days))
            {
-              bonusTokens = tokens.mul(IcoKefOneTwo);
+              bonusTokens = tokens.mul(IcoKefOneTwo / 100);
            }    
 
         tokens += bonusTokens;
